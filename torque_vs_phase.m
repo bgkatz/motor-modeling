@@ -13,3 +13,7 @@ parfor x = 1:n
 end
 
 figure;plot(phase, torque_vec);
+title(strcat('Torque Components, ', num2str(mag), ' Amps'));
+legend('Total', 'PM', 'Reluctance');
+xlabel('Current Angle (rad)');
+ylabel('Torque (N-m)');
