@@ -2,13 +2,13 @@
 %%%%%% Specify Motor Parameters %%%%%%
 %%%%%% Edit these parameters %%%%%%
 %%% Flux Linkage, Wb %%%
-k1 = 0.1; %%harmonic coefficients
+k1 = 0.06; %%harmonic coefficients
 k3 = .00;
 k5 = -.00;
 k7 = 0;
-k9 = 0.001;
+k9 = 0; %0.001;
 %%% flux linked by rotor at angle theta_r to phase at angle theta_p %%%
-wb_r = @(theta_r, theta_p) k1*cos(theta_p - theta_r) + k3*cos(3*(theta_p - theta_r)) + k5*cos(5*(theta_p - theta_r)) + k9*cos(9*(theta_p - theta_r));
+wb_r = @(theta_r, theta_p) k1*cos(theta_p - theta_r) + k3*cos(3*(-theta_r) +theta_p) + k5*cos(5*(-theta_r)+theta_p) + k9*cos(9*(-theta_r) + theta_p);
 
 %%% Phase Resistances %%%
 r_a = .1;
@@ -42,3 +42,4 @@ L = @(theta_r) [l_p(theta_r, 0), l_m, l_m; l_m, l_p(theta_r, 2*pi/3), l_m; l_m, 
 
 %%% Flux Linkage Matrix %%%
 Wb = @(theta_r, i) [L(theta_r)]*i + [wb_r(theta_r, 0); wb_r(theta_r, 2*pi/3); wb_r(theta_r, -2*pi/3)];
+
