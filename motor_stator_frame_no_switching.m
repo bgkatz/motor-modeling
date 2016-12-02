@@ -14,7 +14,7 @@ abc = @(theta) sqrt(2/3)*[cos(-theta), sin(-theta), 1/sqrt(2);
 dq0 = @(theta) abc(theta)';%inv(abc(theta));
 
 %%% Inverter Properties %%%
-f_switch = 20000;    %%Loop frequency
+f_switch = 10000;    %%Loop frequency
 v_bus = 160;         %%Bus voltage
 
 %%% Current Controller %%%
@@ -60,7 +60,7 @@ v_d_cmd = 0;
 v_q_cmd = 0;
 
 %%% Mechanical Load %%%
-J = .01; %%Kg-m^2
+J = .21; %%Kg-m^2
 B  = 0.005; %%N-m*s/rad
 
 %%% Initialize Dynamics Variables %%%
@@ -68,8 +68,8 @@ i = [0; 0; 0];
 v = [0; 0; 0];
 v_bemf = v;
 theta = 0;
-thetadot = 0;
-thetadotdot = .025;
+thetadot = .01;
+thetadotdot = 0;%.025;
 phase_shift = 0;
 
 tfinal = 8;
@@ -277,8 +277,8 @@ for j=1:length(t)
     torque_rel= p_rel/thetadot;
     
     
-    %thetadotdot = (torque - B*thetadot)/J;
-    thetadot = thetadot + thetadotdot;%*dt;
+    thetadotdot = (torque - B*thetadot)/J;
+    thetadot = thetadot + thetadotdot*dt;
     thetadot_mech = thetadot;
     
     theta = theta + thetadot*dt;

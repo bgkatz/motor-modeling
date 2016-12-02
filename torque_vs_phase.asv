@@ -3,11 +3,11 @@ format compact
 n = 2;
 n2 = 2;
 n3 = 2;
-tdot_max = 3000;
+tdot_max = 2000;
 tdot = linspace(0.01, tdot_max, n3);
 phase_min = pi/2;
 phase_max = pi;
-mag_vec = linspace(1, sqrt(3/2)*200, n2);
+mag_vec = linspace(1, 200, n2);
 mag = sqrt(3/2)*200;
 phase = linspace(phase_min, phase_max, n);
 torque_vec = zeros(length(n), 4);
@@ -26,16 +26,15 @@ for k = 1:n3
             [t, t_pm, t_rel, i_mag] = motor_fun(mag_vec(j), phase(x), tdot(k));
             torque_vec(x,:) = [t, t_pm, t_rel, i_mag];
         end
+        
         t_max = max(torque_vec(:,1));
-        ind = find(torque_vec(:,1) == t_max);
-        phi_max = phase(ind);
-        i_mag_max = torque_vec(ind,4);
+        phi_max = phase(find(torque_vec(:,1) == t_max ));
+        i_mag = 
         
         mag_log_vec(count) = mag_vec(j);
         torque_max_vec(count) = t_max;
         phi_max_vec(count) = phi_max;
         tdot_vec(count) = tdot(k);
-        i_mag_vec(count) = i_mag_max;
         
         count = count+1;
         %figure; plot(phase, torque_vec(:,1));
@@ -60,15 +59,5 @@ end
 % data = [tdot', phi_max_vec'];
 % save('2d_lut.mat', 'data');
 
-figure;scatter3(tdot_vec, mag_log_vec, phi_max_vec, 20, phi_max_vec, 'filled'); 
-view(0, 90); colorbar();
-xlabel('Rad/s'); ylabel('Current Command'); zlabel('Phase');
-figure;scatter3(tdot_vec, mag_log_vec, torque_max_vec, 20, torque_max_vec, 'filled'); 
-view(0, 90); colorbar();
-xlabel('Rad/s'); ylabel('Current Command'); zlabel('Torque');
-figure;scatter3(tdot_vec, i_mag_vec, torque_max_vec, 20, torque_max_vec, 'filled'); 
-view(0, 90); colorbar();
-xlabel('Rad/s'); ylabel('Current'); zlabel('Torque');
-
-data = [tdot_vec, mag_log_vec, i_mag_vec, phi_max_vec, torque_max_vec];
-save('2d_lut.mat', 'data');
+figure;scatter3(mag_log_vec, tdot_vec, phi_max_vec, 20, phi_max_vec, 'filled')
+figure;scatter3(mag_log_vec, tdot_vec, torque_max_vec, 20, torque_max_vec, 'filled')

@@ -1,4 +1,4 @@
-function [ torque_avg,  t_pm, t_rel ] = motor_fun( mag, phase, tdot)
+function [ torque_avg,  t_pm, t_rel, i_mag] = motor_fun( mag, phase, tdot)
 
 
 %%% Load Motor Configuration %%%
@@ -292,6 +292,7 @@ figure;plot(int_vec);
 torque_avg = torque_vec(end);
 t_pm = torque_pm_vec(end);
 t_rel = torque_rel_vec(end);
+i_mag = (i_dq0(1)^2 + i_dq0(2)^2)^.5;
 
 i_q_ref;
 i_d_ref;
