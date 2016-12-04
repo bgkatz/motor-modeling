@@ -285,8 +285,8 @@ end
 
 %figure;plot(t, i_vec);
 %figure;plot(t, v_bemf_vec);
-% figure;plot(t, i_dq_vec); title('I D/Q');
-% figure;plot(t, torque_vec); title ('Torque');
+%figure;plot(t, i_dq_vec); title('I D/Q');
+%figure;plot(t, torque_vec); title ('Torque');
 %figure;plot(t, thetadot_mech_vec); title('Theta dot');
 %figure;plot(t, torque_abc_vec);
 %figure;plot(t, v_uvw_vec);
@@ -297,8 +297,8 @@ t_pm = torque_pm_vec(end);
 t_rel = torque_rel_vec(end);
 i_mag = (i_dq0(1)^2 + i_dq0(2)^2)^.5;
 
-i_q_ref;
-i_d_ref;
+%i_q_ref
+%i_d_ref
 
 v_d_cmd;
 v_q_cmd;
