@@ -16,7 +16,7 @@ dq0 = @(theta) abc(theta)';%inv(abc(theta));
 
 %%% Inverter Properties %%%
 f_switch = 10000;    %%Loop frequency
-v_bus = 260;         %%Bus voltage
+v_bus = 160;         %%Bus voltage
 
 %%% Current Controller %%%
 i_ref = mag;
@@ -24,7 +24,9 @@ phase_ref = phase;
 i_q_ref = mag*sin(phase);
 i_d_ref = mag*cos(phase);
 
-i_dq0 = [0; 0];
+dq0_0 = dq0(0);
+abc_0 = abc(0);
+i_dq0 = [i_d_ref; i_q_ref; 0];
 
 r_s = r_a;
 loop_dt = 1/f_switch;
@@ -67,7 +69,8 @@ J = .1; %%Kg-m^2
 B  = 0.00; %%N-m*s/rad
 
 %%% Initialize Dynamics Variables %%%
-i = [0; 0; 0];
+%i = [0; 0; 0];
+i = abc_0*i_dq0;    %Settles faster by initializing currents
 v = [0; 0; 0];
 v_bemf = v;
 theta = 0;
@@ -75,7 +78,7 @@ thetadot = tdot;
 thetadotdot = 0;
 phase_shift = 0;
 
-tfinal = 1;
+tfinal = .1;
 dt = 1/(f_switch);     %%Simulation time step
 %dt = 1e-5;
 t = 0:dt:tfinal;
@@ -107,7 +110,7 @@ thetadot_mech_vec = zeros(length(t), 1);
 torque_pm_vec = zeros(length(t), 1);
 torque_rel_vec = zeros(length(t), 1);
 current_mag_vec = zeros(length(t), 1);
-tic
+%tic
 
 for j=1:length(t)
     time = t(j);
@@ -281,13 +284,13 @@ end
 %toc
 
 %figure;plot(t, i_vec);
-figure;plot(t, v_bemf_vec);
-figure;plot(t, i_dq_vec); title('I D/Q');
-figure;plot(t, torque_vec); title ('Torque');
+%figure;plot(t, v_bemf_vec);
+% figure;plot(t, i_dq_vec); title('I D/Q');
+% figure;plot(t, torque_vec); title ('Torque');
 %figure;plot(t, thetadot_mech_vec); title('Theta dot');
 %figure;plot(t, torque_abc_vec);
-figure;plot(t, v_uvw_vec);
-figure;plot(int_vec);
+%figure;plot(t, v_uvw_vec);
+%figure;plot(int_vec);
 
 torque_avg = torque_vec(end);
 t_pm = torque_pm_vec(end);

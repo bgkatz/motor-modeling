@@ -311,15 +311,15 @@ for j=1:length(t)
 end
 toc
 
-figure;plot(thetadot_vec, i_vec);
+%figure;plot(thetadot_vec, i_vec);
 %figure;plot(t, v_bemf_vec);
-figure;plot(thetadot_vec, i_dq_vec); title('I D/Q');
+%figure;plot(thetadot_vec, i_dq_vec); title('I D/Q');
 %figure;plot(t, torque_vec); title ('Torque');
 %hold all; plot(t, torque_pm_vec); plot(t, torque_rel_vec);
 %figure;plot(t, thetadot_mech_vec); title('Theta dot');
 figure;plot(thetadot_mech_vec, torque_vec); title('Torque vs Speed');
 %figure;plot(t, v_uvw_vec); title('UVW Voltages');
-figure;plot(thetadot_mech_vec, power_mech_vec); title('Power vs Speed');
+%figure;plot(thetadot_mech_vec, power_mech_vec); title('Power vs Speed');
 %figure;plotyy(t, phase_shift_vec, t, current_mag_vec);title('Current Phase/Mag');
 %figure;plot(t, torque_abc_vec);
 
