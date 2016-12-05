@@ -2,9 +2,9 @@ format compact
 
 %%% Generate a Percent Max Torque lookup table %%%
 
-n = 5;  % Phase intervals
+n = 100;  % Phase intervals
 n2 = 5; % Torque intervals
-n3 = 5; % Velocity intervals
+n3 = 50; % Velocity intervals
 tdot_max = 2500;
 mag_max = sqrt(3/2)*200;
 tdot = linspace(0.01, tdot_max, n3);
@@ -58,7 +58,7 @@ figure;plot(tdot, phi_max_vec);  title('Max Phase')
 figure;plot(tdot, i_mag_max_vec); title('Max Current')%figure;plot(tdot, t_max_vec, tdot, t_min_vec); title('Max/Min Torque')
 %figure;plot(tdot, phi_max_vec, tdot, phi_min_vec);  title('Max/Min Phase')
 %figure;plot(tdot, i_mag_max_vec, tdot, i_mag_min_vec); title('Max/Min Current')
-
+%%
 for k = 1:n3
     for j = 1:n2
         parfor x = 1:n
