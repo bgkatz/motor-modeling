@@ -80,6 +80,7 @@ for k = 1:n3
 end
 
 max_current = mag_max_vec(1,:);
+max_current = min(max_current, mag_max);
 
 tic
 parfor j = 1:n2
@@ -144,3 +145,8 @@ figure;surf(tdot_vec, mag_max_vec, phi_max_vec);
 %figure;plot(tdot, i_mag_max_vec, tdot, i_mag_min_vec); title('Max/Min Current')
 
 %figure; scatter(phase_vec, torque_vec);
+data.tdot = tdot_vec;
+data.mag = mag_max_vec;
+data.torque = torque_max_vec;
+data.phi = phi_max_vec;
+save('data.mat', data);
