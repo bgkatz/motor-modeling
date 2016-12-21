@@ -1,7 +1,7 @@
 
 
 %%% Load Motor Configuration %%%
-motorConfig = 'Altermotter';
+motorConfig = 'ME_5208_274kv';
 run(strcat('Motor Configs\', motorConfig));
 
 %%% Transforms %%%
@@ -20,14 +20,14 @@ abc = @(theta) sqrt(2/3)*[cos(-theta), sin(-theta), 1/sqrt(2);
 dq0 = @(theta) abc(theta)';%inv(abc(theta));
 
 %%% Inverter Properties %%%
-f_switch = 10000;    %%Switching frequency
-pwm_resolution = 8; %%Bits of PWM resolution
-v_bus = 160;         %%Bus voltage
+f_switch = 40000;    %%Switching frequency
+pwm_resolution = 10; %%Bits of PWM resolution
+v_bus = 24;         %%Bus voltage
 
 %%% Current Controller %%%
 
-i_q_ref = 200
-i_d_ref = 30
+i_q_ref = sqrt(3/2)*40
+i_d_ref = 0
 
 i_dq0 = [0; 0];
 
@@ -40,15 +40,11 @@ k_q = r_s*((2000*pi/(f_switch*4))/(1-exp(-r_s*loop_dt/l_q)));
 ki_d = 1-exp(-r_s*loop_dt/l_d);
 k_d = r_s*((2000*pi/(f_switch*4))/(1-exp(-r_s*loop_dt/l_d)));
 
-k_q = .5;
-k_d = .5;
-ki_q = .1;
-ki_d = .1;
 
 q_int = 0;
 d_int = 0;
-q_int_max = v_bus;
-d_int_max = v_bus;
+q_int_max = sqrt(2)*v_bus;
+d_int_max = sqrt(2)*v_bus;
 
 dtc_uvw = [0; 0; 0];
 v_d_cmd = 0;
@@ -62,7 +58,7 @@ B  = 0; %%N-m*s/rad
 i = [0; 0; 0];
 v = [0; 0; 0];
 theta = 0;
-thetadot = 00.1;
+thetadot = 1000;
 thetadotdot = 0;
 phase_shift = 0;
 
@@ -82,6 +78,7 @@ l_old = L(theta);
 
 thetadot_vec = zeros(length(t), 1);
 v_vec = zeros(length(t), 3);
+v_uvw_vec = zeros(length(t), 3);
 i_vec = zeros(length(t), 3);
 torque_abc_vec = zeros(length(t), 3);
 torque_vec = zeros(length(t), 1);
@@ -244,6 +241,7 @@ for j=1:length(t)
     thetadot_vec(j) = thetadot;
     i_vec(j,:) = i';
     v_vec(j,:) = v'; 
+    v_uvw_vec(j,:) = v_uvw';
     torque_vec(j) = torque;
     torque_abc_vec(j,:) = torque_abc';
     power_elec_abc_vec(j,:) = p_elec_abc';

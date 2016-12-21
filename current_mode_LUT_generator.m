@@ -34,61 +34,6 @@ tdot_vec = zeros(n2, n3);
 i_mag_vec =  zeros(n2, n3);
 percent = zeros(n2, n3);
 
-%{
-%%% Find max achievable current and pos/neg torques vs speed %%%    parfor k = 1:n3
-for k = 1:n3
-    tic
-    phi = linspace(phase_min, phase_max, 5)';
-    delta = phi(2) - phi(1);
-    torque = zeros(5, 1);
-    v = zeros(5, 1);
-    parfor x = 1:5
-        [torque(x), v(x)] = motor_fun_current_mode(mag_max, phi(x), tdot(k));
-    end
-    tmax = max(torque);
-    ind_max = find(torque==tmax);
-    ind_max = ind_max(1);
-    ind = [ind_max-1; ind_max; ind_max+1];
-    while(delta > tol)
-        delta = delta/2;
-
-        if(ind(3) > length(phi))
-            phi = circshift(phi, -1);
-            torque = circshift(torque, -1);
-            v = circshift(v, -1);
-            ind = ind-1;
-        elseif (ind(1)==0)
-            phi = circshift(phi, 1);
-            torque = circshift(torque, 1);
-            v = circshift(v, 1);
-            ind = ind+1;
-        end
-
-        phi = [phi(ind(1)); phi(ind(1))+delta; phi(ind(2)); phi(ind(2))+delta; phi(ind(3))];
-        [t1, v1] = motor_fun_current_mode(mag_max, phi(2), tdot(k));
-        [t2, v2] = motor_fun_current_mode(mag_max, phi(4), tdot(k));
-        torque = [torque(ind(1));t1; torque(ind(2)); t2; torque(ind(3))];
-        v = [v(ind(1)); v1; v(ind(2)); v2; v(ind(3))];
-        tmax = max(torque);
-        ind_max = find(torque==tmax);
-        ind_max = ind_max(1);
-        ind = [ind_max-1; ind_max; ind_max+1];
-        %torque_vec = [torque_vec;torque];
-        %phase_vec = [phase_vec;phase];
-        torque_max_vec(1, k) = max(torque);
-        phi_max_vec(1, k) = phi(ind_max);
-        v_max_vec(1, k) = v(ind_max);
-        tdot_vec(1, k) = tdot(k);
-    end   
-    toc
-    k
-end
-
-max_current = v_max_vec(1,:);
-max_current = min(max_current, mag_max);
-
-figure;plotyy(tdot_vec(1,:), torque_max_vec(1,:), tdot_vec(1,:), phi_max_vec(1,:));
-%}
 parfor j = 1:n2
     %tic
     for k = 1:n3

@@ -2,28 +2,28 @@
 %%%%%% Specify Motor Parameters %%%%%%
 %%%%%% Edit these parameters %%%%%%
 %%% Flux Linkage, Wb %%%
-k1 = 0.06; %%harmonic coefficients
+k1 = 0.0058; %%harmonic coefficients
 k3 = .00;
-k5 = -.00;
+k5 = .00;
 k7 = 0;
 k9 = 0.000; 
 %%% pm flux linked by rotor at angle theta_r to phase at angle theta_p %%%
 wb_r = @(theta_r, theta_p) k1*cos(theta_p - theta_r) + k3*cos(3*(-theta_r) +theta_p) + k5*cos(5*(-theta_r)+theta_p) + k9*cos(9*(-theta_r) + theta_p);
 
 %%% Phase Resistances %%%
-r_a = .1;
-r_b = .1;
-r_c = .1;
+r_a = .192;
+r_b = .192;
+r_c = .192;
 
 %%% Termination Type: wye, delta, ind %%%
-termination = 'wye';
+termination = 'delta';
 
 %%% Pole Pairs %%%
-npp = 3;
+npp = 7;
 
 %%% Inductances %%%
-l_d = .0008;     %D-Axis Inductance
-l_q = .002;      %Q-Axis Inductance
+l_d = 60e-6;     %D-Axis Inductance
+l_q = 60e-6;      %Q-Axis Inductance
 l_m =  .00;    %Phase Mutual Inductance, assuming a constant for now
 
 

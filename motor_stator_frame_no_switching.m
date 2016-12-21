@@ -1,7 +1,7 @@
 
 
 %%% Load Motor Configuration %%%
-motorConfig = 'Altermotter';
+motorConfig = 'ME_5208_274kv';
 run(strcat('Motor Configs\', motorConfig));
 
 %%% Transforms %%%
@@ -14,13 +14,13 @@ abc = @(theta) sqrt(2/3)*[cos(-theta), sin(-theta), 1/sqrt(2);
 dq0 = @(theta) abc(theta)';%inv(abc(theta));
 
 %%% Inverter Properties %%%
-f_switch = 10000;    %%Loop frequency
-v_bus = 160;         %%Bus voltage
+f_switch = 20000;    %%Loop frequency
+v_bus = 24;         %%Bus voltage
 
 %%% Current Controller %%%
 
-i_ref = sqrt(3/2)*200;
-phase_ref = 0;
+i_ref = sqrt(3/2)*40;
+phase_ref = pi/2;
 i_q_ref = i_ref*sin(phase_ref);
 i_d_ref = i_ref*cos(phase_ref);
 
@@ -35,11 +35,6 @@ k_q = r_s*((2000*pi/(f_switch*4))/(1-exp(-r_s*loop_dt/l_q)));
 ki_d = 1-exp(-r_s*loop_dt/l_d);
 k_d = r_s*((2000*pi/(f_switch*4))/(1-exp(-r_s*loop_dt/l_d)));
 
-k_mag = k_q;
-ki_mag = ki_q;
-
-k_phase = .5*k_d;
-ki_phase = 2*ki_d;
 
 
 q_int = 0;
@@ -56,15 +51,15 @@ v_d_cmd = 0;
 v_q_cmd = 0;
 
 %%% Mechanical Load %%%
-J = .21; %%Kg-m^2
-B  = 0.005; %%N-m*s/rad
+J = .00021; %%Kg-m^2
+B  = 0.000007; %%N-m*s/rad
 
 %%% Initialize Dynamics Variables %%%
 i = [0; 0; 0];
 v = [0; 0; 0];
 v_bemf = v;
 theta = 0;
-thetadot = .01;
+thetadot = .1;
 thetadotdot = 0;%.025;
 phase_shift = 0;
 
@@ -143,7 +138,7 @@ for j=1:length(t)
     cmd_max = sqrt(3/2)*200;%*(thetadot<480) + (680-.2*thetadot)*(thetadot >=480);
     %i_ref = min(i_ref, cmd_max);
 
-    phase_ref = interp1(data(:,1), data(:,2), thetadot, 'linear', 'extrap');
+    %phase_ref = interp1(data(:,1), data(:,2), thetadot, 'linear', 'extrap');
     i_q_ref = i_ref*sin(phase_ref);
     i_d_ref = i_ref*cos(phase_ref);
 
@@ -159,18 +154,19 @@ for j=1:length(t)
     d_int = max(min(d_int, d_int_max), -d_int_max);
 
 
-    v_q_cmd = k_q*i_q_error + q_int + v_q_coupling + dq0_bemf(2);
-    v_d_cmd = k_d*i_d_error + d_int + v_d_coupling + dq0_bemf(1);
+    v_q_cmd = k_q*i_q_error + q_int;% + v_q_coupling + dq0_bemf(2);
+    v_d_cmd = k_d*i_d_error + d_int;% + v_d_coupling + dq0_bemf(1);
 
     cmd_mag = norm([v_d_cmd, v_q_cmd]);
     %%% Limit voltage commands to not overmodulate %%%
+    
     if(cmd_mag > (sqrt(2)*v_bus))
        v_d_cmd = v_d_cmd*(sqrt(2)*v_bus/cmd_mag);
        v_q_cmd = v_q_cmd*(sqrt(2)*v_bus/cmd_mag);
     end
 
 
-    end
+    %end
     
     %%% Calculate actual inverter voltages %%%
     v_uvw_cmd = dq0_transform\[v_d_cmd; v_q_cmd; 0];
@@ -178,6 +174,7 @@ for j=1:length(t)
     v_uvw_cmd = v_uvw_cmd - v_offset;
     v_uvw_cmd = .5*v_bus + .5*v_uvw_cmd;
     v_uvw = max(min(v_uvw_cmd, v_bus), 0);
+    %v_uvw = [0; 0; 0];
     phase_shift = atan2(i_dq0(2), i_dq0(1));
     
 
@@ -245,7 +242,7 @@ for j=1:length(t)
     wb_abc_rotor_old = wb_abc_rotor;
     l_old = l;
     
-    %%% Save Data %%%
+    %%% Save Data %%%figue;
     thetadot_vec(j) = thetadot;
     i_vec(j,:) = i';
     v_vec(j,:) = v'; 
@@ -268,11 +265,14 @@ for j=1:length(t)
     %current_mag_vec(j) = sample_mag;
 end
 toc
+uvw_diff_vec = [v_uvw_vec(:,1) - v_uvw_vec(:,2), v_uvw_vec(:,2) - v_uvw_vec(:,3), v_uvw_vec(:,3) - v_uvw_vec(:,1)];
 
 %figure;plot(thetadot_vec, i_vec);
 %figure;plot(t, v_bemf_vec);
-%figure;plot(thetadot_vec, i_dq_vec); title('I D/Q');
+figure;plot(t, i_dq_vec); title('I D/Q');
 %figure;plot(t, torque_vec); title ('Torque');
+%figure;plot(t, uvw_diff_vec); title('Line-To-Line Voltages @300 rad/s'); xlabel('Time (s)'); ylabel('Volts'); legend('U-V', 'V-W', 'W-U');
+
 %hold all; plot(t, torque_pm_vec); plot(t, torque_rel_vec);
 %figure;plot(t, thetadot_mech_vec); title('Theta dot');
 figure;plot(thetadot_mech_vec, torque_vec); title('Torque vs Speed');

@@ -31,14 +31,14 @@ i_dq0 = [i_d; i_q; 0];
 v = [0; 0; 0];
 v_bemf = v;
 theta = 0;
-thetadot = .01;
+thetadot = 300;
 i = abc(theta)*i_dq0;
 i_old = [0; 0; 0];
 i_dot = [0; 0; 0];
-thetadotdot = 10;
+thetadotdot = 0;
 phase_shift = 0;
 
-tfinal = .01;
+tfinal = .04;
 dt = 1/(f_switch);     %%Simulation time step
 %dt = 1e-5;
 t = 0:dt:tfinal;
@@ -147,6 +147,8 @@ for j=1:length(t)
 end
 toc
 
+uvw_diff_vec = [v_uvw_vec(:,1) - v_uvw_vec(:,2), v_uvw_vec(:,2) - v_uvw_vec(:,3), v_uvw_vec(:,3) - v_uvw_vec(:,1)];
+
 %figure;plot(thetadot_vec, i_vec);
 %figure;plot(t, v_bemf_vec);
 %figure;plot(thetadot_vec, i_dq_vec); title('I D/Q');
@@ -154,7 +156,7 @@ toc
 %hold all; plot(t, torque_pm_vec); plot(t, torque_rel_vec);
 %figure;plot(t, thetadot_mech_vec); title('Theta dot');
 %figure;plot(thetadot_mech_vec, torque_vec); title('Torque vs Speed');
-%figure;plot(t, v_uvw_vec); title('UVW Voltages');
+figure;plot(t, uvw_diff_vec); title('Line-To-Line Voltages @300 rad/s'); xlabel('Time (s)'); ylabel('Volts'); legend('U-V', 'V-W', 'W-U');
 %figure;plot(thetadot_mech_vec, power_mech_vec); title('Power vs Speed');
 %figure;plotyy(t, phase_shift_vec, t, current_mag_vec);title('Current Phase/Mag');
 %figure;plot(t, torque_abc_vec);
