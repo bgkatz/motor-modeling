@@ -1,13 +1,14 @@
 %%% Generate PMT-based lookup table %%%
 
-speed = data(:,1);
-cmd = data(:,2);
-phase = data(:,4);
-torque = data(:,5);
-mag = data(:,3);
+speed = data.tdot;
+phase = data.phi;
+torque = data.torque;
+mag = data.mag;
 %figure;scatter3(data(:,1), data(:,2), data(:,5), 15, data(:,5))
 
-speedvec = [speed(find(diff(speed))); speed(end)];
+speedvec = speed(1,:);
+tmaxvec = torque(1,:);
+
 
 %%% Create max torque vector %%%
 for x = 1:length(speedvec)

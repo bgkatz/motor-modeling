@@ -19,62 +19,35 @@ v_bus = 160;         %%Bus voltage
 
 %%% Current Controller %%%
 
-i_ref = sqrt(3/2)*200;
-phase_ref = 0;
-i_q_ref = i_ref*sin(phase_ref);
-i_d_ref = i_ref*cos(phase_ref);
+i_mag = sqrt(3/2)*200;
+i_phase = 2.2;
+i_q = i_mag*sin(i_phase);
+i_d = i_mag*cos(i_phase);
 
-i_dq0 = [0; 0];
+i_dq0 = [i_d; i_q; 0];
 
-r_s = r_a;
-loop_dt = 1/f_switch;
-
-
-ki_q = 1-exp(-r_s*loop_dt/l_q);
-k_q = r_s*((2000*pi/(f_switch*4))/(1-exp(-r_s*loop_dt/l_q)));
-ki_d = 1-exp(-r_s*loop_dt/l_d);
-k_d = r_s*((2000*pi/(f_switch*4))/(1-exp(-r_s*loop_dt/l_d)));
-
-k_mag = k_q;
-ki_mag = ki_q;
-
-k_phase = .5*k_d;
-ki_phase = 2*ki_d;
-
-
-q_int = 0;
-d_int = 0;
-q_int_max = sqrt(2)*v_bus;
-d_int_max = sqrt(2)*v_bus;
-mag_int = 0;
-phase_int = 0;
-mag_int_max = sqrt(2)*v_bus;
-phase_int_max = 4*pi;
-
-dtc_abc = [0; 0; 0];
-v_d_cmd = 0;
-v_q_cmd = 0;
 
 %%% Mechanical Load %%%
 J = .21; %%Kg-m^2
 B  = 0.005; %%N-m*s/rad
 
 %%% Initialize Dynamics Variables %%%
-i = [0; 0; 0];
+
 v = [0; 0; 0];
 v_bemf = v;
 theta = 0;
 thetadot = .01;
-thetadotdot = 0;%.025;
+i = abc(theta)*i_dq0;
+i_old = [0; 0; 0];
+i_dot = [0; 0; 0];
+thetadotdot = 0;
 phase_shift = 0;
 
-tfinal = 8;
+tfinal = .01;
 dt = 1/(f_switch);     %%Simulation time step
 %dt = 1e-5;
 t = 0:dt:tfinal;
 wb_abc_rotor_old = [wb_r(theta, 0); wb_r(theta, 2*pi/3); wb_r(theta, -2*pi/3)];
-
-timer_count = 0;
 
 timer_step = (dt/(1/(2*f_switch)));
 timer_dir = 1;
@@ -84,6 +57,7 @@ l_old = L(theta);
 
 thetadot_vec = zeros(length(t), 1);
 v_vec = zeros(length(t), 3);
+v_dq0_vec = zeros(length(t), 3);
 i_vec = zeros(length(t), 3);
 torque_abc_vec = zeros(length(t), 3);
 torque_vec = zeros(length(t), 1);
@@ -106,15 +80,6 @@ tic
 for j=1:length(t)
     time = t(j);
  
-%     if(time > tfinal/2);
-%         i_ref = 50;
-%         %phase_ref = -pi;
-%         %i_q_ref = -100
-%         %i_d_ref = 2;
-%         
-%     end
-    
-    %%% Controller %%%    
     %%% Sample Current %%%
     
     if (strcmp(termination, 'delta'))
@@ -130,58 +95,13 @@ for j=1:length(t)
     abc_transform = abc(theta);
     dq0_transform = inv(abc_transform);
     
-    i_dq0 = dq0_transform*i_sample;
-    
-    v_q_coupling = 2*l_d*i_dq0(1)*thetadot;
-    v_d_coupling = -2*l_q*i_dq0(2)*thetadot;
-    
-    dq0_bemf = dq0_transform*v_bemf;
-    %%% Controller %%%
+    i = abc_transform*i_dq0;
+    i_dot = (i - i_old)*(1/dt);
+    i_old = i;
+
+
    
-    %%% Normal PI controller w/ feedforward decopuling and bemf feedforward %%%
 
-    cmd_max = sqrt(3/2)*200;%*(thetadot<480) + (680-.2*thetadot)*(thetadot >=480);
-    %i_ref = min(i_ref, cmd_max);
-
-    phase_ref = interp1(data(:,1), data(:,2), thetadot, 'linear', 'extrap');
-    i_q_ref = i_ref*sin(phase_ref);
-    i_d_ref = i_ref*cos(phase_ref);
-
-    %i_q_ref = interp1(data(:,1), data(:,3), thetadot, 'linear');
-    %i_d_ref = interp1(data(:,1), data(:,2), thetadot, 'linear');
-
-    i_q_error = i_q_ref - i_dq0(2);
-    i_d_error = i_d_ref - i_dq0(1);
-
-    q_int = q_int + i_q_error*ki_q*k_q;
-    d_int = d_int + i_d_error*ki_d*k_d;
-    q_int = max(min(q_int, q_int_max), -q_int_max);
-    d_int = max(min(d_int, d_int_max), -d_int_max);
-
-
-    v_q_cmd = k_q*i_q_error + q_int + v_q_coupling + dq0_bemf(2);
-    v_d_cmd = k_d*i_d_error + d_int + v_d_coupling + dq0_bemf(1);
-
-    cmd_mag = norm([v_d_cmd, v_q_cmd]);
-    %%% Limit voltage commands to not overmodulate %%%
-    if(cmd_mag > (sqrt(2)*v_bus))
-       v_d_cmd = v_d_cmd*(sqrt(2)*v_bus/cmd_mag);
-       v_q_cmd = v_q_cmd*(sqrt(2)*v_bus/cmd_mag);
-    end
-
-
-    end
-    
-    %%% Calculate actual inverter voltages %%%
-    v_uvw_cmd = dq0_transform\[v_d_cmd; v_q_cmd; 0];
-    v_offset = 0.5*(min(v_uvw_cmd) + max(v_uvw_cmd)); %%SVM
-    v_uvw_cmd = v_uvw_cmd - v_offset;
-    v_uvw_cmd = .5*v_bus + .5*v_uvw_cmd;
-    v_uvw = max(min(v_uvw_cmd, v_bus), 0);
-    phase_shift = atan2(i_dq0(2), i_dq0(1));
-    
-
-    
     %%% Rotor Flux linked to each phase, and derivative %%
     wb_abc_rotor = [wb_r(theta, 0); wb_r(theta, 2*pi/3); wb_r(theta, -2*pi/3)];
     wb_abc_rotor_dot = (wb_abc_rotor - wb_abc_rotor_old)*(1/dt);
@@ -193,27 +113,13 @@ for j=1:length(t)
     %%% Back-EMF %%%
     v_bemf = (l_dot*i + wb_abc_rotor_dot);
     
-    v_pm = wb_abc_rotor_dot;
-    v_rel = l_dot*i;
     
-    
-    %%% Phase Currents %%%
-  
-    if (strcmp(termination, 'delta'))
-        v = [v_uvw(1)-v_uvw(2); v_uvw(2) - v_uvw(3); v_uvw(3) - v_uvw(1)];
-        i_dot = l\(v - v_bemf - R*i);
-    elseif (strcmp(termination, 'wye'))
-        value = [l, [1;1;1]; [1 1 1 0]]\([v_uvw;0] - [v_bemf;0] - [R, [0; 0; 0]; [0 0 0 0]]*[i; 0]);
-        i_dot = value(1:3);
-        v_n = value(4);
-        v = v_uvw - [v_n; v_n; v_n];
-    elseif (strcmp(termination, 'ind'))
-        v = v_uvw;
-        i_dot = l\(v - v_bemf - R*i);
-    end
-    
-    i = i + i_dot*dt;
-    
+    %%% Phase Voltages %%%
+     value = [l, [1;1;1]; [1 1 1 0]]*[i_dot; 0] + [v_bemf;0] + [R, [0; 0; 0]; [0 0 0 0]]*[i; 0];
+     v_uvw = value(1:3);
+     v_dq0 = dq0_transform*v_uvw;
+
+        
     %%% Terminal Power %%%
     p_elec_abc = v_uvw.*i;
     p_elec = sum(p_elec_abc);
@@ -222,20 +128,16 @@ for j=1:length(t)
     p_mech_abc =  v_bemf.*i;
     p_mech = sum(p_mech_abc);
     
-    p_pm = sum(v_pm.*i);
-    p_rel = sum(v_rel.*i);
-    
     %%% Phase Torques %%%
     torque_abc = p_mech_abc*(1/thetadot);
     
     
     %%% Total Torque %%%
     torque = sum(torque_abc);
-    torque_pm = p_pm/thetadot;
-    torque_rel= p_rel/thetadot;
+
     
     
-    thetadotdot = (torque - B*thetadot)/J;
+    %thetadotdot = (torque - B*thetadot)/J;
     thetadot = thetadot + thetadotdot*dt;
     thetadot_mech = thetadot;
     
@@ -250,21 +152,14 @@ for j=1:length(t)
     i_vec(j,:) = i';
     v_vec(j,:) = v'; 
     v_uvw_vec(j,:) = v_uvw';
+    v_dq0_vec(j, :) = v_dq0';
     torque_vec(j) = torque;
     torque_abc_vec(j,:) = torque_abc';
     power_elec_abc_vec(j,:) = p_elec_abc';
     power_elec_vec(j) = p_elec;
     power_mech_abc_vec(j,:) = p_mech_abc';
     power_mech_vec(j) = p_mech;
-    i_dq_vec(j,:) = [i_dq0(1); i_dq0(2)];
-    v_bemf_vec(j,:) = v_bemf';
-    phase_shift_vec(j) = phase_shift;
-    cmd_vec(j,:) = [v_d_cmd; v_q_cmd];
-    int_vec(j,:) = [d_int; q_int];
     thetadot_mech_vec(j) = thetadot_mech;
-    torque_pm_vec(j) = torque_pm;
-    torque_rel_vec(j) = torque_rel;
-    v_n_vec(j) = v_n;
     %current_mag_vec(j) = sample_mag;
 end
 toc
