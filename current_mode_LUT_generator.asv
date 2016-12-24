@@ -5,16 +5,16 @@ format compact
 clear all
 %%% Generate a Percent Max Torque lookup table %%%
 
-n = 800;  % Phase resolution
-n2 = 100; % Current intervals
-n3 = 100; % Velocity intervals
+n = 200;  % Phase resolution
+n2 = 20; % Current intervals
+n3 = 20; % Velocity intervals
 tdot_max = 3000;
 mag_max = sqrt(3/2)*200;
 v_max = 160/(sqrt(2));
 tdot = linspace(0.01, tdot_max, n3)';
 
-phase_min = pi;
-phase_max = 3*pi/2;
+phase_min = 0;
+phase_max = 2*pi;
 tol = (phase_max - phase_min)/n;
 %phase_max = 2*pi;
 
@@ -48,7 +48,7 @@ parfor j = 1:n2
         end
         is_valid = v<v_max;
         tmax = min(torque.*is_valid);
-        if(tmax<0)
+        if(tmax0)
             ind_max = find(torque==tmax);
         else
             torque = 0;
@@ -85,4 +85,4 @@ data.tdot = tdot_vec;
 data.v = mag_max_vec;
 data.torque = torque_max_vec;
 data.phi = phi_max_vec;
-save('regen_data.mat', 'data');
+%save('data6.mat', 'data');
