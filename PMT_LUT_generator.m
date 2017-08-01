@@ -4,9 +4,9 @@ clear
 
 n = 200;  % Phase intervals
 n2 = 5; % Torque intervals
-n3 = 1; % Velocity intervals
+n3 = 5; % Velocity intervals
 tdot_max = 1;
-mag_max = sqrt(3/2)*200;
+mag_max = 40;
 tdot = linspace(0.01, tdot_max, n3);
 
 phase_min = pi/2;
@@ -15,7 +15,7 @@ phase_max = pi;
 
 pmi = linspace(0, 1, n2);   %Percent Max current.  Easier to generate table this way, then interpolate torques
 
-mag_vec = linspace(1, sqrt(3/2)*200, n2);
+mag_vec = linspace(1, mag_max, n2);
 phase = linspace(phase_min, phase_max, n);
 torque_vec = zeros(length(n), 4);
 

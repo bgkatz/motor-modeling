@@ -1,17 +1,17 @@
 
 %%%%%% Specify Motor Parameters %%%%%%
 %%%%%% Edit these parameters %%%%%%
-%%% Flux Linkage, Wb %%%
-k1 = 0.003; %%harmonic coefficients
+%%% Phase Flux Linkage, Wb %%%
+k1 = 0.0024; %%harmonic coefficients
 k3 = .00;
 k5 = -.00;
 k7 = 0;
 k9 = 0.000; 
 
 %%% Phase Resistances %%%
-r_a = .096;
-r_b = .096;
-r_c = .096;
+r_a = .104;
+r_b = .104;
+r_c = .104;
 
 %%% Termination Type: wye, delta, ind %%%
 termination = 'wye';
@@ -20,10 +20,12 @@ termination = 'wye';
 npp = 21;
 
 %%% Inductances %%%
-l_d = 60e-6;     %D-Axis Inductance
-l_q = 60e-6;      %Q-Axis Inductance
+l_d = 30e-6;     %D-Axis Inductance
+l_q = 30e-6;      %Q-Axis Inductance
 l_m =  .00;    %Phase Mutual Inductance, assuming a constant for now
 
+%%% Cogging %%%
+t_cog = @(theta_r) .02*sin(6*theta_r);
 
 %%%%% Automatic Setup %%%%%
 %%%%% Don't change unless you know what you're doing %%%%%
@@ -35,12 +37,22 @@ R = [r_a 0 0;
 %%% pm flux linked by rotor at angle theta_r to phase at angle theta_p %%%
 wb_r = @(theta_r, theta_p) k1*cos(theta_p - theta_r) + k3*cos(3*(-theta_r) +theta_p) + k5*cos(5*(-theta_r)+theta_p) + k9*cos(9*(-theta_r) + theta_p);
 
-%%% Phase Self Inductance %%%
+dwb_r = @(theta_r, theta_p) k1*sin(theta_p - theta_r);
+
+%%% Phase Self Inductance %%%dat
 l_p = @(theta_r, theta_p) .5*(l_d - l_q)*(cos(2*(theta_p - theta_r)))+(l_d + l_q)/2;
+
+%%% Derivative of Self Inductance wrt Rotor Angle %%%
+dl_p = @(theta_r, theta_p) (l_d - l_q)*(sin(2*(theta_p - theta_r)));
 
 %%% Inductance Matrix %%% 
 L = @(theta_r) [l_p(theta_r, 0), l_m, l_m; l_m, l_p(theta_r, 2*pi/3), l_m; l_m, l_m, l_p(theta_r, -2*pi/3)];
 
+%%% Derivative of Inductance Matrix wrt Rotor Angle
+dL = @(theta_r) [dl_p(theta_r, 0), 0, 0; 0, dl_p(theta_r, 2*pi/3), 0; 0, 0, dl_p(theta_r, -2*pi/3)];
+
 %%% Flux Linkage Matrix %%%
 Wb = @(theta_r, i) [L(theta_r)]*i + [wb_r(theta_r, 0); wb_r(theta_r, 2*pi/3); wb_r(theta_r, -2*pi/3)];
+
+
 

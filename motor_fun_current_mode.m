@@ -1,16 +1,18 @@
+%%% Fast version for optimization.  Fixes phase currents, returns torque and
+%%% terminal voltage.
+
 function [ t, v_mag ] = motor_fun_current_mode(i_mag, i_phase, thetadot)
 
-%%% Load Motor Configuration %%%
+
+
 %%%%%% Specify Motor Parameters %%%%%%
 %%%%%% Edit these parameters %%%%%%
 %%% Flux Linkage, Wb %%%
-k1 = 0.06; %%harmonic coefficients
-k3 = .00;
-k5 = -.00;
-k7 = 0;
-k9 = 0; %0.001;
-%%% flux linked by rotor at angle theta_r to phase at angle theta_p %%%
-wb_r = @(theta_r, theta_p) k1*cos(theta_p - theta_r) + k3*cos(3*(-theta_r) +theta_p) + k5*cos(5*(-theta_r)+theta_p) + k9*cos(9*(-theta_r) + theta_p);
+i_wb_ref = [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200];
+wb_lut = [0.0676, 0.0676, 0.0658, 0.0638, 0.0566, 0.0533, 0.0485, 0.0457, 0.0441, 0.0417, 0.0405];
+k1 = @(iq) interp1(i_wb_ref, wb_lut, iq, 'pchip');
+%%% pm flux linked by rotor at angle theta_r to phase at angle theta_p %%%
+wb_r = @(theta_r, theta_p, iq) k1(iq)*cos(theta_p - theta_r);
 
 %%% Phase Resistances %%%
 r_a = .1;
@@ -23,45 +25,68 @@ termination = 'wye';
 %%% Pole Pairs %%%
 npp = 3;
 
-%%% Inductances %%%
-l_d = .0008;     %D-Axis Inductance
-l_q = .002;      %Q-Axis Inductance
+%%% Nominal Inductances %%%
+
 l_m =  .00;    %Phase Mutual Inductance, assuming a constant for now
 
+%%% Inductance Curves %%%
+
+% i_ref = [0; 20; 40; 60; 80; 100; 120; 130; 150; 170; 200];
+% ld_lut = 1e-3*[.65; .5785;  .5655; .533; .494; .351; .26; .2301; .20; .17; .14]+.4e-3; ;
+% %lq_lut = 1e-3*[1.465; 1.3868; 1.3754; 1.2830;  1.0740; 0.8410; 0.550; 0.42; 0.32; .27; .25];
+% lq_lut = 1e-3*[1.465; 1.465; 1.465; 1.465; 1.1571; 1.0052; .850; .7; .6; .5; .33]+.4e-3;;
+% 
+% %ld_lut = 1e-3*[.65; .5785;  .5655; .533; .494; .351; .26; .2301; .22; .21; .20];
+% %lq_lut = 1e-3*[1.465; 1.3868; 1.3754; 1.2830;  1.0740; 0.8410; 0.550; 0.44; 0.37; .33; .31];
+% 
+% l_d = @(id, iq)  interp1(i_ref, ld_lut, norm([id, iq]), 'pchip');
+% l_q = @(id, iq)  interp1(i_ref, lq_lut, norm([id, iq]), 'pchip');
+
+i_ref = [0; 40; 80; 120; 150; 200];
+ld_lut = 1e-3*[.65;  .5655;.494;.26; .22;.20];
+lq_lut = 1e-3*[1.465; 1.3754; 1.0740;0.550; 0.37; .31];
+l_d = @(id, iq) interp1(i_ref, ld_lut, abs(id), 'pchip');
+l_q = @(id, iq) interp1(i_ref, lq_lut, abs(iq), 'pchip');
+
+
+%%%%% Automatic Setup %%%%%
+%%%%% Don't change unless you know what you're doing %%%%%
 %%% Resistance Matrix %%%
 R = [r_a 0 0; 
     0 r_b 0; 
     0 0 r_c];
 
 %%% Phase Self Inductance %%%
-l_p = @(theta_r, theta_p) .5*(l_d - l_q)*(cos(2*(theta_p - theta_r)))+(l_d + l_q)/2;
+%l_p = @(theta_r, theta_p, id, iq) .5*(l_d(id) - l_q(iq))*(cos(2*(-theta_r + theta_p)))+(l_d(id) + l_q(iq))/2;
+l_p = @(theta_r, theta_p, id, iq) .5*(l_d(id, iq) - l_q(iq, iq))*(cos(2*(-theta_r + theta_p)))+(l_d(id, iq) + l_q(id, iq))/2;
 
 %%% Inductance Matrix %%% 
-L = @(theta_r) [l_p(theta_r, 0), l_m, l_m; l_m, l_p(theta_r, 2*pi/3), l_m; l_m, l_m, l_p(theta_r, -2*pi/3)];
+L = @(theta_r, id, iq) [l_p(theta_r, 0, id, iq), l_m, l_m; l_m, l_p(theta_r, 2*pi/3, id, iq), l_m; l_m, l_m, l_p(theta_r, -2*pi/3, id, iq)];
 
+%L_ll = @(theta_r) l_p(theta_r, 0)+l_p(theta_r, 2*pi/3);
 %%% Flux Linkage Matrix %%%
-Wb = @(theta_r, i) [L(theta_r)]*i + [wb_r(theta_r, 0); wb_r(theta_r, 2*pi/3); wb_r(theta_r, -2*pi/3)];
+Wb = @(theta_r, i, id, iq) [L(theta_r, id, iq)]*i + [wb_r(theta_r, 0, iq); wb_r(theta_r, 2*pi/3, iq); wb_r(theta_r, -2*pi/3, iq)];
+
 
 
 %%% Transforms %%%
 %%% Power-invariant form %%%
 %%% Not your canonical transform, but it fits my assumptions %%%
-abc = @(theta) sqrt(2/3)*[cos(-theta), sin(-theta), 1/sqrt(2);
+abc = @(theta) [cos(-theta), sin(-theta), 1/sqrt(2);
     cos((2*pi/3)-theta), sin((2*pi/3)-theta), 1/sqrt(2);
     cos((-2*pi/3)-theta), sin((-2*pi/3)-theta), 1/(sqrt(2))];
 
-dq0 = @(theta) abc(theta)';%inv(abc(theta));
+dq0 = @(theta)  inv(abc(theta));
 
 %%% Inverter Properties %%%
 f_switch = 10000;    %%Loop frequency
-v_bus = 160;         %%Bus voltage
 
 %%% Current Controller %%%
 
-i_q = i_mag*sin(i_phase);
-i_d = i_mag*cos(i_phase);
+iq = i_mag*sin(i_phase);
+id = i_mag*cos(i_phase);
 
-i_dq0 = [i_d; i_q; 0];
+i_dq0 = [id; iq; 0];
 
 %%% Initialize Dynamics Variables %%%
 
@@ -78,13 +103,13 @@ tfinal = .0002;
 dt = 1/(f_switch);     %%Simulation time step
 %dt = 1e-5;
 t = 0:dt:tfinal;
-wb_abc_rotor_old = [wb_r(theta, 0); wb_r(theta, 2*pi/3); wb_r(theta, -2*pi/3)];
+wb_abc_rotor_old = [wb_r(theta, 0, iq); wb_r(theta, 2*pi/3, iq); wb_r(theta, -2*pi/3, iq)];
 
 timer_step = (dt/(1/(2*f_switch)));
 timer_dir = 1;
 
-wb_old = Wb(theta, i);
-l_old = L(theta);
+wb_old = Wb(theta, i, id, iq);
+l_old = L(theta, id, iq);
 
 thetadot_vec = zeros(length(t), 1);
 v_vec = zeros(length(t), 3);
@@ -117,16 +142,18 @@ for j=1:length(t)
     i = abc_transform*i_dq0;
     i_dot = (i - i_old)*(1/dt);
     i_old = i;
+    
 
 
    
 
     %%% Rotor Flux linked to each phase, and derivative %%
-    wb_abc_rotor = [wb_r(theta, 0); wb_r(theta, 2*pi/3); wb_r(theta, -2*pi/3)];
+    wb_abc_rotor = [wb_r(theta, 0, iq); wb_r(theta, 2*pi/3, iq); wb_r(theta, -2*pi/3, iq)];
     wb_abc_rotor_dot = (wb_abc_rotor - wb_abc_rotor_old)*(1/dt);
     
     %%% Phase Inductance and derivative %%%
-    l = L(theta);
+    
+    l = L(theta, id, iq);
     l_dot = (l-l_old)*(1/dt);
     
     %%% Back-EMF %%%
@@ -170,18 +197,6 @@ for j=1:length(t)
 end
 %toc
 
-%figure;plot(thetadot_vec, i_vec);
-%figure;plot(t, v_bemf_vec);
-%figure;plot(thetadot_vec, i_dq_vec); title('I D/Q');
-%figure;plot(t, torque_vec); title ('Torque');
-%hold all; plot(t, torque_pm_vec); plot(t, torque_rel_vec);
-%figure;plot(t, thetadot_mech_vec); title('Theta dot');
-%figure;plot(thetadot_mech_vec, torque_vec); title('Torque vs Speed');
-%figure;plot(t, v_uvw_vec); title('UVW Voltages');
-%figure;plot(t, v_dq0_vec); title('dq0 voltages');
-%figure;plot(thetadot_mech_vec, power_mech_vec); title('Power vs Speed');
-%figure;plotyy(t, phase_shift_vec, t, current_mag_vec);title('Current Phase/Mag');
-%figure;plot(t, torque_abc_vec);
 
 t = torque_vec(end);
 v_mag = norm(v_dq0);

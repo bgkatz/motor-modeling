@@ -3,11 +3,14 @@ current = data.v;
 torque = data.torque;
 phi = data.phi;
 
+speed_intervals = 121;
+pmt_intervals = 50;
+
 speed_ind = 1:1:length(tdot(1,:));
 [max_torque, i] = max(torque, [], 1);
-speed = tdot(1,:);
+speed = [0, tdot(1,:)];
 ind = sub2ind(size(torque), i, speed_ind);
-pmt = 0:.01:1;
+pmt = linspace(0, 1, 50);
 
 [torque_grid, pmt_grid] = meshgrid(max_torque, pmt);
 speed_grid = meshgrid(tdot(1,:), pmt);
@@ -19,14 +22,14 @@ pmt_current_grid = zeros(size(mt_grid));
 for x = 1:length(max_torque)
     torque_vec = torque(i(x):end, x);
     [min_torque, i_min] = min(torque_vec);
-    torque_vec = torque_vec(1:i_min);
+    torque_vec = torque_vec(1:i_min-1);
     current_vec = current(i(x):i(x)+i_min-1, x);
     phase_vec = phi(i(x):i(x)+i_min-1, x);
 
     pmt_torque = mt_grid(:,x);
     pmt_current = interp1(torque_vec, current_vec, pmt_torque, 'pchip');
     pmt_phase = interp1(torque_vec, phase_vec, pmt_torque, 'pchip');
-    
+    2
     pmt_phase_grid(:,x) = pmt_phase;
     pmt_current_grid(:,x) = pmt_current;
     
@@ -48,5 +51,11 @@ pmt_lut.current = pmt_current_grid;
 pmt_lut.phase = pmt_phase_grid;
 pmt_lut.i_d = i_d_grid;
 pmt_lut.i_q = i_q_grid;
+pmt_lut.i_q(1,:) = zeros(size(pmt_lut.i_q(1,:)));
 
-save('PMT_LUT.mat', 'pmt_lut');
+save('Data/Altermotter/PMT_LUT_sat.mat', 'pmt_lut');
+
+pqtab = pmt_lut.i_q;
+pdtab = pmt_lut.i_d;
+zqtab = pmt_lut.i_q(1,:);
+zdtab = pmt_lut.i_d(1,:);
