@@ -1,9 +1,9 @@
-%%% This version has ny switching dynamics, so can be much faster.  Usefull
+%%% This version has no switching dynamics, so can be much faster.  Usefull
 %%% for long time-scale modeling, or if switching speed effects don't
 %%% matter
 
 %%% Load Motor Configuration %%%
-motorConfig = 'Altermotter';
+motorConfig = 'U12';
 run(strcat('Motor Configs\', motorConfig));
 
 %%% Transforms %%%
@@ -16,12 +16,13 @@ abc = @(theta) [cos(-theta), sin(-theta), 1/sqrt(2);
 dq0 = @(theta) inv(abc(theta)); %= inv(abc)
 
 %%% Inverter Properties %%%
-spl = 5;            %%simulation steps per loop
-f_switch = 10000;       %% maximum switching frequency
-f_loop = 30000;    %%Loop frequency
+spl = 10;            %%simulation steps per loop
+f_switch = 40000;       %% maximum switching frequency
+f_loop = 40000;    %%Loop frequency
 f_sim = spl*f_loop;
-v_bus = 160;         %%Bus voltage
-switch_delay = 13e-6;
+v_bus = 15;         %%Bus voltage
+loop_dt = 1/f_loop;
+switch_delay = .0*loop_dt;
 
 %%% Current Controller %%%
 
@@ -34,16 +35,18 @@ switch_delay = 13e-6;
 %i_d_ref = -101.5
 pmt_old = 0;
 
-i_dq0 = [0; 0];
+i_dq0 = [0; 0;0];
+i_dq0_old = [0;0; 0];
+i_dq0_dot = [0;0; 0];
 
 r_s = r_a;
-loop_dt = 1/f_loop;
 
 
-ki_q = 1-exp(-r_s*loop_dt/(l_q_nom));
-k_q = r_s*((100*pi/(f_switch))/(1-exp(-r_s*loop_dt/l_q_nom)));
-ki_d = 1-exp(-r_s*loop_dt/(l_d_nom));
-k_d = r_s*((100*pi/(f_switch))/(1-exp(-r_s*loop_dt/l_d_nom)));
+
+ki_q = 1-exp(-r_s*loop_dt/(l_q));
+k_q = r_s*((pi/6)/(1-exp(-r_s*loop_dt/l_q)));
+ki_d = 1-exp(-r_s*loop_dt/(l_d));
+k_d = r_s*((pi/6)/(1-exp(-r_s*loop_dt/l_d)));
 
 
 % k_q = 2.5;
@@ -56,13 +59,19 @@ i_d_ref = 0;
         
 q_int = 0;
 d_int = 0;
-q_int_max = 0;v_bus;
-d_int_max = 0;v_bus;
+q_int_max = v_bus*2/sqrt(3);
+d_int_max = v_bus*2/sqrt(3);
 mag_int = 0;
 mag_int_max = v_bus;
 i_q_ref_filt = 0;
 i_d_ref_filt = 0;
 theta_s = 0;
+
+param_est = [r_s+.5; 2*l_d; .5*l_q; .4*k1];
+%param_est = [r_s+.5; .4*k1];
+
+A = rand(4);
+b = [1; 1; 1; 1];
 
 dtc_abc = [0; 0; 0];
 v_d_cmd = 0;
@@ -76,19 +85,19 @@ v_uvw = [0; 0; 0];
 
 wb_stator_est = [0; 0; 0];
 %%% Mechanical Load %%%
-J = .005; %%Kg-m^2
-B  = 0.05; %%N-m*s/rad
+J = .00001; %%Kg-m^2
+B  = 0.000001; %%N-m*s/rad
 
 %%% Initialize Conditions %%%
 i = [0; 0; 0];
 v = [0; 0; 0];
 v_bemf = v;
-theta = 0.1;
-thetadot = 500;
+theta = 0.01;
+thetadot = 4000;
 thetadotdot = 0;%.025;
 phase_shift = 0;
 
-tfinal = .05;
+tfinal = .025;
 dt = 1/(f_sim);     %%Simulation time step
 %dt = 1e-5;
 t = 0:dt:tfinal;
@@ -101,7 +110,6 @@ timer_dir = 1;
 
 wb_old = Wb(theta, i, i_dq0(1), i_dq0(2));
 l_old = L(theta, i_dq0(1), i_dq0(2));
-
 thetadot_vec = zeros(length(t), 1);
 v_vec = zeros(length(t), 3);
 i_vec = zeros(length(t), 3);
@@ -120,7 +128,7 @@ int_vec = zeros(length(t), 2);
 thetadot_mech_vec = zeros(length(t), 1);
 torque_pm_vec = zeros(length(t), 1);
 torque_rel_vec = zeros(length(t), 1);
-current_mag_vec = zeros(length(t), 1);
+i_mag_vec = zeros(length(t), 1);
 v_uvw_vec = zeros(length(t), 3);
 v_uvw_cmd_vec = zeros(length(t), 3);
 wb_est_vec = zeros(length(t), 3);
@@ -129,78 +137,191 @@ l_vec = zeros(length(t), 3);
 v_ff_vec = zeros(length(t), 2);
 switch_choice_vec = zeros(length(t), 1);
 theta_vec = zeros(length(t), 1);
+param_est_vec = zeros(length(t), 4);
+harmonic_vec = zeros(length(t), 2);
+dq0_bemf_vec = zeros(length(t), 3);
+afc_int_vec = zeros(length(t), 4);
 tic
 
 %sv = linspace(0, pmt_lut.speed(end), length(pmt_lut.pmt(1,:)));
 %pv = linspace(0, 1, length(pmt_lut.pmt(:,1)));
         
+loop_start_time = 0;
+
+
+n_linreg = 1000;
+n_steps = 10;
+b_vec = zeros(2*n_linreg, 1);
+A_mat = zeros(2*n_linreg, 4);
+linreg_counter = 0;
+v_d_cmd_old = 0;
+v_q_cmd_old = 0;
+delay = tfinal*.5;
+v_d_cmd = .5;
+v_q_cmd = .5;
+
+
+afc_d_int_1 = 0;
+afc_d_int_2 = 0;
+afc_q_int_1 = 0;
+afc_q_int_2 = 0;
+afc_q_int_3 = 0;
+afc_q_int_4 = 0;
+afc_q_int_5 = 0;
+afc_q_int_6 = 0;
+
 for j=1:length(t)
     time = t(j);
     
-    if(time > tfinal/6);
+    %if(time > tfinal/6);
         %tau_ext = 1000;
-        i_q_ref = 19;
-        i_d_ref = -5;
-    end
-    if(time>3.5*tfinal/6);
-        i_q_ref = 19;
-        i_d_ref = -50;
-    end
+        %i_q_ref = 20;
+        i_d_ref = -10;
+        i_q_ref = 2;
+    %end
+   %%if(time>tfinal/2);
+   %   i_d_ref = -5;
+   %   i_q_ref = -2;
+   %end
+   
+   %i_q_ref = 3*sin(200*time);
+   %i_d_ref = 3*cos(200*time);
+   %i_d_ref = i_d_ref + 1e-4;
+   %i_q_ref = i_q_ref + 1e-4;
+   %i_q_ref = 2;
+   %i_d_ref = 2;
+    
+    i_q_max = ((1/sqrt(3))*v_bus - thetadot*k1)/(r_s);
+    i_q_min = (-(1/sqrt(3))*v_bus - thetadot*k1)/(r_s);
+    %i_q_ref = max(min(i_q_max, i_q_ref), i_q_min);
+        
     
     %%% Sample Current %%%
     if (strcmp(termination, 'delta'))
             i_sample = [i(1)-i(3); i(2) - i(1); i(3) - i(2)];
         elseif (strcmp(termination, 'wye'))
-            i_sample = i + 3*(rand(3, 1)-.5);
+            i_sample = i + .06*(rand(3, 1)-.5);
         elseif (strcmp(termination, 'ind'))
             i_sample = i;
         end
 
         %%% Calculate Transform Matrix %%%
-        %%dq0_transform = dq0(theta);
-        abc_transform = abc(theta);
-        dq0_transform = inv(abc_transform);
+        dq0_transform = dq0(theta);
+        abc_transform = abc(theta+.5*thetadot*loop_dt);
 
         i_dq0 = dq0_transform*i_sample;
         
+        dq0_2 = dq0(5*theta);
+        i_harmonic = dq0_2*i_dq0;
+        
+        
     %control loop
-    if(count == spl)
+    if(count == (spl))
+        
+        
+        
+        
+        loop_start_time = time;
         %v_q_coupling = 2*l_d*i_dq0(1)*thetadot;
         %v_d_coupling = -2*l_q*i_dq0(2)*thetadot;
-
         dq0_bemf = dq0_transform*v_bemf; 
         %%% Controller %%%
-
+        %k_q = 0;
+        %k_d = 0;
         %%% Normal PI controller w/ feedforward decopuling and bemf feedforward %%%
+        k_db = .5*l_d*f_loop;
+        
+        
+        
+        i_q_ref_new = .2*i_q_ref + .8*i_q_ref_filt;
+        i_d_ref_new = .2*i_d_ref + .8*i_d_ref_filt;
+        
+        i_q_dot_ref = (i_q_ref_new - i_q_ref_filt)/loop_dt;
+        i_d_dot_ref = (i_d_ref_new - i_d_ref_filt)/loop_dt;
+        
+        i_q_ref_filt = i_q_ref_new;
+        i_d_ref_filt = i_d_ref_new;
+        
+        i_q_ac = i_q_ref*.7*sin(12*theta);
+        
+        i_q_error = (i_q_ref + i_q_ac - i_dq0(2))/thetadot;
+        i_d_error = (i_d_ref - i_dq0(1))/thetadot;
+        
+        %q_int = q_int + i_q_error*ki_q*k_q;
+        %d_int = d_int + i_d_error*ki_d*k_d;
+        
+        
+        
+        k_afc = 00;
+        h = 6;
+        phi = 0;
+        afc_d_int_1  = afc_d_int_1 + loop_dt*k_afc*i_d_error*cos(h*theta + phi);
+        afc_d_int_2  = afc_d_int_2 + loop_dt*k_afc*i_d_error*sin(h*theta + phi);
+        afc_d_err = afc_d_int_1*cos(h*theta) + afc_d_int_2*sin(h*theta);
+        afc_q_int_1  = afc_q_int_1 + loop_dt*k_afc*i_q_error*cos(h*theta + phi);
+        afc_q_int_2  = afc_q_int_2 + loop_dt*k_afc*i_q_error*sin(h*theta + phi);
+        afc_q_err = afc_q_int_1*cos(h*theta) + afc_q_int_2*sin(h*theta);
+        
+        h2 = 12;
+        afc_q_int_3  = afc_q_int_3 + loop_dt*k_afc*i_q_error*cos(h2*theta + phi);
+        afc_q_int_4  = afc_q_int_4 + loop_dt*k_afc*i_q_error*sin(h2*theta + phi);
+        afc_q_err_2 = afc_q_int_3*cos(h2*theta) + afc_q_int_4*sin(h2*theta);
 
-        %pmt = 1;
-        %pmt_ind = floor(pmt*(length(pmt_lut.pmt(:,1))));
-        %speed_ind = floor(length(pmt_lut.speed(1,:))*(thetadot/(pmt_lut.speed(end)))) + 1;
         
         
+        i_q_error = i_q_ref  + thetadot*afc_q_err + thetadot*afc_q_err_2  - i_dq0(2);
+        i_d_error = i_d_ref + thetadot*afc_d_err - i_dq0(1);
+        
+        q_int = q_int + i_q_error*ki_q;
+        d_int = d_int + i_d_error*ki_d;
 
-        
-        i_q_ref_filt = .02*i_q_ref + .98*i_q_ref_filt;
-        i_d_ref_filt = .02*i_d_ref + .98*i_d_ref_filt;
-        
-        i_q_error = i_q_ref_filt - i_dq0(2);
-        i_d_error = i_d_ref_filt - i_dq0(1);
-
-        q_int = q_int + i_q_error*ki_q*k_q;
-        d_int = d_int + i_d_error*ki_d*k_d;
+        %q_int = q_int + afc_q_err*ki_q*k_q;
+        %d_int = d_int + afc_d_err*ki_d*k_d;
 
         q_int = max(min(q_int, q_int_max), -q_int_max);
         d_int = max(min(d_int, d_int_max), -d_int_max);
          
         int_mag = norm([q_int, d_int]);
-
         
-            
-         %v_d_ff = 2*i_d_ref*r_a;
-         %v_q_ff = 2*(i_q_ref*r_a + sqrt(3/2)*k1*thetadot);
+        i_dq0_dot = (i_dq0 - i_dq0_old)/(1.0*loop_dt);
+        i_dq0_old = i_dq0;
+        
+       A = [A(3, 1), A(3, 2), A(3, 3), A(3, 4);
+            A(4, 1), A(4, 2), A(4, 3), A(4, 4);
+            i_dq0(1), i_dq0_dot(1), -thetadot*i_dq0(2), 0;
+            i_dq0(2), thetadot*i_dq0(1), i_dq0_dot(2), thetadot];
+        %A = A+1e-6*rand(4);
+        b = [b(3); b(4);v_d_cmd; v_q_cmd];
+        
+        %b = [v_d_cmd; v_q_cmd];
+        
+        
+       % x = A\b;
+        
 
-        v_q_cmd = k_q*i_q_error + q_int;% +sqrt(3)*r_a*i_q_ref + sqrt(3/2)*thetadot*l_d_nom*i_dq0(1) + sqrt(3)*thetadot*wb_nom;%k_q*i_q_error + q_int;% + v_q_ff;% + v_q_coupling;% + dq0_bemf(2);
-        v_d_cmd = k_d*i_d_error + d_int;% + sqrt(3)*r_a*i_d_ref - sqrt(3/2)*thetadot*l_q_nom*i_dq0(2);%k_d*i_d_error + d_int;% + v_q_ff;% + v_d_coupling;% + dq0_bemf(1);
+        %param_est = .99*param_est + .01*x*.5;
+        
+        
+        
+        if(time>delay)
+        if((linreg_counter>0)&(linreg_counter<=n_linreg))
+            b_vec(2*(linreg_counter-1)+1) = v_d_cmd;
+            b_vec(2*(linreg_counter-1)+2) = v_q_cmd;
+            A_mat(2*(linreg_counter-1)+1, :) = [i_dq0(1), 0, -thetadot*i_dq0(2), 0];
+            A_mat(2*(linreg_counter-1)+2, :) = [i_dq0(2), thetadot*i_dq0(1), 0, thetadot];
+        end
+        linreg_counter  = linreg_counter + 1;
+        end
+        
+
+            
+        v_d_ff = 2*i_d_ref_filt*r_a - 2*thetadot*l_q*i_dq0(2) + 0*l_d*i_d_dot_ref;% + k_db*i_d_error;
+        v_q_ff = 2*i_q_ref_filt*r_a + 2*k1*thetadot + 2*thetadot*l_d*i_dq0(1) + 0*l_q*i_q_dot_ref;% + k_db*i_q_error;
+        %v_d_ff = 0;
+        %v_q_ff = 0;
+        
+        v_q_cmd = k_q*(i_q_error) + q_int + v_q_ff;% +sqrt(3)*r_a*i_q_ref + sqrt(3/2)*thetadot*l_d_nom*i_dq0(1) + sqrt(3)*thetadot*wb_nom;%k_q*i_q_error + q_int;% + v_q_ff;% + v_q_coupling;% + dq0_bemf(2);
+        v_d_cmd = k_d*(i_d_error) + d_int + v_d_ff;% + sqrt(3)*r_a*i_d_ref - sqrt(3/2)*thetadot*l_q_nom*i_dq0(2);%k_d*i_d_error + d_int;% + v_q_ff;% + v_d_coupling;% + dq0_bemf(1);
         
         
         
@@ -209,87 +330,21 @@ for j=1:length(t)
         %%% Limit voltage commands to not overmodulate %%%
 
         cmd_mag = norm([v_d_cmd, v_q_cmd]);
-        %%% Limit voltage commands to not overmodulate %%%
-        if(cmd_mag > (v_bus))
-           v_d_cmd = v_d_cmd*(v_bus/cmd_mag);
-           v_q_cmd = v_q_cmd*(v_bus/cmd_mag);
+        %%% Limit voltage commands to not overmodulate too hard %%%
+        if(cmd_mag > ((2/sqrt(3))*v_bus))
+           v_d_cmd = v_d_cmd*((2/sqrt(3))*v_bus/cmd_mag);
+           v_q_cmd = v_q_cmd*((2/sqrt(3))*v_bus/cmd_mag);
         end
-        
-%         tol = 5;
-%             i_q_error = (i_q_ref_filt - i_dq0(2));
-%             i_d_error = (i_d_ref_filt - i_dq0(1));
-%             v_q_ff = 1.5*r_a*i_dq0(2) + 1.5*thetadot*l_d(i_dq0(1))*i_dq0(1) + 1.5*thetadot*wb_nom;
-%             v_d_ff = 1.5*r_a*i_dq0(1) - 1.5*thetadot*l_q(i_dq0(2))*i_dq0(2);% + 1.5*.15e-3*;
-%             v_dynamics = [cos(-theta), -sin(-theta); sin(-theta), cos(-theta)]*[v_d_ff; v_q_ff];
-%             v_q_vec =  i_q_error;% + v_q_ff;% + sqrt(3)*r_a*i_dq0(2);% + sqrt(3)*thetadot*l_d_nom*i_dq0(1) + sqrt(3)*thetadot*wb_nom;
-%             v_d_vec =  i_d_error;% + v_d_ff;% + sqrt(3)*r_a*i_dq0(1);% - sqrt(3)*thetadot*l_q_nom*i_dq0(2);
-%             
-%             
-%             %if(norm([i_q_error, i_d_error]) > tol)
-%             %if (time_since_switch > 1/(2*f_switch_max))
-%             %if(abs(i_q_error)>tol || abs(i_d_error) > tol)
-%                 q_dir = v_q_vec;
-%                 d_dir = v_d_vec;
-%                 theta_v = atan2(q_dir, d_dir);
-%                 if(theta_v < 0) theta_v = theta_v + 2*pi; end
-%                 theta_s = theta_v + theta;
-%                 theta_s = mod(theta_s, 2*pi);
-%                 time_since_switch = 0;
-%             %end
-% 
-% 
-%         %end
-%         
-%         stator_vectors = .5*v_bus*[1, .5, -.5, -1, -.5, .5; 0, sqrt(3)/2, sqrt(3)/2, 0, -sqrt(3)/2, -sqrt(3)/2];
-%         rot = [cos(-theta), -sin(-theta); sin(-theta), cos(-theta)];
-%         error_sf = (rot*[i_d_error; i_q_error]);
-%         error_mag = norm(error_sf);
-%         K = 200;
-%         
-%         %sat
-%         
-%         v_dynamics_sf = rot*[v_d_ff; v_q_ff];
-%         voltage_vectors = stator_vectors;% + repmat(v_dynamics_sf,1, 6 );
-%         voltage_magnitudes = sqrt(sum(abs(voltage_vectors).^2,1));
-%         %error_dot_voltage = error_sf*(voltage_vectors./voltage_magnitudes);
-%         error_dot_voltage = error_sf'*voltage_vectors;
-%         
-%         [val, ind] = max(error_dot_voltage);
-%         switch_choice = ind;
-%         time_since_switch  = time_since_switch + dt;
-%         
-%         if (time_since_switch > 1/(2*f_switch_max))
-%             if(switch_choice==1) switch_state = [1 0 0];
-%                 elseif (switch_choice==2) switch_state = [1 1 0];
-%                 elseif (switch_choice==3) switch_state = [0 1 0];
-%                 elseif (switch_choice==4) switch_state = [0 1 1];
-%                 elseif (switch_choice==5) switch_state = [0 0 1];
-%                 elseif (switch_choice==6) switch_state = [1 0 1];
-%             end
-%             time_since_switch = 0;
-%         end
-        
-        
-        
-%         if(theta_s < pi/6 || theta_s >= 11*pi/6) switch_state = [1 0 0]; switch_choice = 1;
-%             elseif (pi/6 <= theta_s  && theta_s < 3*pi/6 ) switch_state = [1 1 0]; switch_choice = 2;
-%             elseif (3*pi/6 <= theta_s && theta_s < 5*pi/6 ) switch_state = [0 1 0]; switch_choice = 3;
-%             elseif (5*pi/6 <= theta_s && theta_s < 7*pi/6 ) switch_state = [0 1 1]; switch_choice = 4;
-%             elseif (7*pi/6 <= theta_s && theta_s  < 9*pi/6 ) switch_state = [0 0 1]; switch_choice = 5;
-%             elseif (9*pi/6 <= theta_s && theta_s  < 11*pi/6 ) switch_state = [1 0 1]; switch_choice = 6;
-%         end
-% %         
-        
         
          
         
         %%% Calculate actual inverter voltages %%%
-        v_uvw_cmd = abc_transform*[v_d_cmd; v_q_cmd; 0]; %%2/sqrt(3) deals with svm modulation depth
+        v_uvw_cmd = abc_transform*1.27*[v_d_cmd; v_q_cmd; 0]; %%2/sqrt(3) deals with svm modulation depth
         
         v_offset = 0.5*(min(v_uvw_cmd) + max(v_uvw_cmd)); %%SVM
         v_uvw_cmd = v_uvw_cmd - v_offset;
         v_uvw_cmd = .5*v_bus + .5*v_uvw_cmd;
-        v_uvw = max(min(v_uvw_cmd, v_bus), 0);
+        %v_uvw = max(min(v_uvw_cmd, v_bus), 0);
         
         
        
@@ -297,10 +352,10 @@ for j=1:length(t)
         count = 0;
     end
     
-    if(time_since_switch > switch_delay)
+    time_since_switch = time-loop_start_time;
+    %if(time_since_switch > switch_delay)
          v_uvw = max(min(v_uvw_cmd, v_bus), 0);
-    end
-    time_since_switch  = time_since_switch + dt;
+    %end
          
     v_dq0_actual = dq0_transform*v_uvw;
     count = count+1;
@@ -368,14 +423,14 @@ for j=1:length(t)
     
     
     %%% Total Torque %%%
-    torque = sum(torque_abc);
+    torque = npp*sum(torque_abc);
     torque_pm = p_pm/thetadot;
     torque_rel= p_rel/thetadot;
     
 %    torque = t_est;
     
     
-    thetadotdot = 1000;%(torque - B*thetadot)/J;
+    thetadotdot = 0;%(torque - B*thetadot)/J;
     thetadot = thetadot + thetadotdot*dt;
     thetadot_mech = thetadot;
     
@@ -406,12 +461,16 @@ for j=1:length(t)
     v_n_vec(j) = v_n;
     wb_est_vec(j,:) = wb_stator_est';
     l_vec(j,:) = [l(1, 1), l(2, 2), l(3, 3)];
-    i_dq_ref_vec(j,:) = [i_d_ref_filt, i_q_ref_filt];
+    i_dq_ref_vec(j,:) = [i_d_ref, i_q_ref];
     v_ff_vec(j,:) = [v_d_ff, v_q_ff];
-    switch_choice_vec(j) = switch_choice;
+    %switch_choice_vec(j) = switch_choice;
     theta_vec(j) = theta;
 %    t_est_vec(j,:) = t_est';
-    %current_mag_vec(j) = sample_mag;
+    i_mag_vec(j) = (i_dq0(1)^2 + i_dq0(2)^2)^.5;
+    param_est_vec(j,:) = param_est';
+    i_harmonic_vec(j,:) = [i_harmonic(1), i_harmonic(2)];
+    dq0_bemf_vec(j,:) = dq0_bemf';
+    afc_int_vec(j,:) = [afc_d_int_1, afc_d_int_2, afc_q_int_1, afc_q_int_2];
     
 end
 toc
@@ -421,18 +480,23 @@ uvw_diff_vec = [v_uvw_vec(:,1) - v_uvw_vec(:,2), v_uvw_vec(:,2) - v_uvw_vec(:,3)
 % thetadot_mech_vec = thetadot_vec/npp;
 % figure;plot(t, torque_vec, t, t_est_vec);
 %figure;plot(t, thetadot_vec);
-figure;plot(t, i_dq_vec, t, i_dq_ref_vec); legend('id', 'iq', 'id ref', 'iq ref');
+figure;plot(t, i_dq_vec); legend('id', 'iq'); hold all; plot(t, mod(theta_vec, 2*pi))
+%figure;plot(t, i_dq_vec, t, i_dq_ref_vec);legend('id', 'iq', 'id ref', 'iq ref');
 %figure;plot(t, v_ff_vec); legend('vd ff', 'vq ff');
 %figure;plot(t, torque_vec); title('Torque');
 %figure;plot(t, cmd_vec); legend('vd', 'vq')
 %figure;plot(t, l_vec); legend('la', 'lb', 'lc');
 figure;plot(t, i_vec); legend('ia', 'ib', 'ic');
+figure;plot(t, v_uvw_vec); legend('v_u', 'v_v', 'v_w');
+%figure;plot(t, afc_int_vec);
+%figure;plot(t, i_harmonic_vec);
+%figure;plot(t, uvw_diff_vec);
 
-figure;subplot(2, 1, 1);
-plot(t, i_dq_vec, t, i_dq_ref_vec); legend('id', 'iq', 'id ref', 'iq ref');
-xlabel('Time (s)'); ylabel('Current (A)');
-subplot(2, 1, 2); plot(t, i_vec); legend('ia', 'ib', 'ic');
-xlabel('Time (s)'); ylabel('Current (A)');
+% figure;subplot(2, 1, 1);
+% plot(t, i_dq_vec, t, i_dq_ref_vec); legend('id', 'iq', 'id ref', 'iq ref');
+% xlabel('Time (s)'); ylabel('Current (A)');
+% subplot(2, 1, 2); plot(t, i_vec); legend('ia', 'ib', 'ic');
+% xlabel('Time (s)'); ylabel('Current (A)');
 %figure;plot(thetadot_vec, i_vec);
 %figure;plot(t, i_dq_vec); title('I D/Q');
 %figure;plot(t, torque_vec); title ('Torque');
@@ -447,4 +511,32 @@ xlabel('Time (s)'); ylabel('Current (A)');
 %figure;plotyy(t, phase_shift_vec, t, current_mag_vec);title('Current Phase/Mag');
 %figure;plot(t, torque_abc_vec);
 
+% figure;
+% ax1 = subplot(4, 1, 1);
+% title('Phase resistance'); ylabel('Ohms');
+% hold all
+% plot(t(3000:end), param_est_vec((3000:end),1));
+% plot(t(3000:end), r_a*ones(size(t(3000:end))));
+% ax2 = subplot(4, 1, 2);
+% title('D-axis inductance'); ylabel('Henries');
+% hold all
+% plot(t(3000:end), param_est_vec((3000:end),2));
+% plot(t(3000:end), l_d*ones(size(t(3000:end))));
+% ax3 = subplot(4, 1, 3);
+% title('Q-axis inductance'); ylabel('Henries');
+% hold all
+% plot(t(3000:end), param_est_vec((3000:end),3));
+% plot(t(3000:end), l_q*ones(size(t(3000:end))));
+% ax4 = subplot(4, 1, 4);
+% title('Flux Linkage'); ylabel('Webers');
+% hold all
+% plot(t(3000:end), param_est_vec((3000:end),4));
+% plot(t(3000:end), k1*ones(size(t(3000:end))));
+% linkaxes([ax1, ax2, ax3, ax4], 'x');
+% NicePlot
+
 t_avg = mean(torque_vec);
+
+p_est = A_mat\(.5*b_vec)
+p_actual = [r_a; l_d; l_q; k1];
+error =  (p_actual - p_est)./p_actual

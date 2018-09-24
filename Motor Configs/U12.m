@@ -3,25 +3,25 @@
 %%%%%% Edit these parameters %%%%%%
 %%% Phase Flux Linkage, Wb %%%
 k1 = 0.0024; %%harmonic coefficients
-k3 = .0000;
-k5 = .0000;
+k3 = .000;
+k5 = .000;
 k7 = 0;
 k9 = 0.000; 
 
 %%% Phase Resistances %%%
-r_a = .130;
-r_b = .130;
-r_c = .130;
+r_a = .015;
+r_b = .015;
+r_c = .015;
 
 %%% Termination Type: wye, delta, ind %%%
 termination = 'wye';
 
 %%% Pole Pairs %%%
-npp = 21;
+npp = 20;
 
 %%% Inductances %%%
-l_d = 30e-6;     %D-Axis Inductance
-l_q = 30e-6;      %Q-Axis Inductance
+l_d = 15e-6;     %D-Axis Inductance
+l_q = 15e-6;      %Q-Axis Inductance
 l_m =  .00;    %Phase Mutual Inductance, assuming a constant for now
 
 %%% Cogging %%%

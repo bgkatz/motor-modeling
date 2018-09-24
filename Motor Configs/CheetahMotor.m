@@ -8,7 +8,7 @@ k5 = -.00;
 k7 = 0;
 k9 = 0.000; 
 %%% pm flux linked by rotor at angle theta_r to phase at angle theta_p %%%
-wb_r = @(theta_r, theta_p) k1*cos(theta_p - theta_r) + k3*cos(3*(-theta_r) +theta_p) + k5*cos(5*(-theta_r)+theta_p) + k9*cos(9*(-theta_r) + theta_p);
+wb_r = @(theta_r, theta_p, i) k1*cos(theta_p - theta_r) + k3*cos(3*(-theta_r) +theta_p) + k5*cos(5*(-theta_r)+theta_p) + k9*cos(9*(-theta_r) + theta_p);
 
 %%% Phase Resistances %%%
 r_a = .25;
@@ -38,8 +38,8 @@ R = [r_a 0 0;
 l_p = @(theta_r, theta_p) .5*(l_d - l_q)*(cos(2*(theta_p - theta_r)))+(l_d + l_q)/2;
 
 %%% Inductance Matrix %%% 
-L = @(theta_r) [l_p(theta_r, 0), l_m, l_m; l_m, l_p(theta_r, 2*pi/3), l_m; l_m, l_m, l_p(theta_r, -2*pi/3)];
+L = @(theta_r, id, iq) [l_p(theta_r, 0), l_m, l_m; l_m, l_p(theta_r, 2*pi/3), l_m; l_m, l_m, l_p(theta_r, -2*pi/3)];
 
 %%% Flux Linkage Matrix %%%
-Wb = @(theta_r, i) [L(theta_r)]*i + [wb_r(theta_r, 0); wb_r(theta_r, 2*pi/3); wb_r(theta_r, -2*pi/3)];
+Wb = @(theta_r, i, id, iq) [L(theta_r)]*i + [wb_r(theta_r, 0); wb_r(theta_r, 2*pi/3); wb_r(theta_r, -2*pi/3)];
 
