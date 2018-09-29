@@ -4,7 +4,7 @@
 %%% Phase Flux Linkage, Wb %%%
 k1 = 0.0024; %%harmonic coefficients
 k3 = .000;
-k5 = .000;
+k5 = .00004;
 k7 = 0;
 k9 = 0.000; 
 

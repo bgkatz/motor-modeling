@@ -93,7 +93,7 @@ i = [0; 0; 0];
 v = [0; 0; 0];
 v_bemf = v;
 theta = 0.01;
-thetadot = 4000;
+thetadot = 1000;
 thetadotdot = 0;%.025;
 phase_shift = 0;
 
